@@ -1,0 +1,60 @@
+{
+  "name": "@capitoltrace/congress-api",
+  "version": "0.1.0",
+  "description": "Typed, zero-dependency TypeScript client for the Congress.gov API — bills, members, votes, and more.",
+  "keywords": [
+    "congress",
+    "congress.gov",
+    "legislation",
+    "civic-tech",
+    "government-data",
+    "api-client",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Capitol Trace (https://capitoltrace.com)",
+  "homepage": "https://github.com/CapitolTrace/congress-api#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CapitolTrace/congress-api.git"
+  },
+  "bugs": "https://github.com/CapitolTrace/congress-api/issues",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}
