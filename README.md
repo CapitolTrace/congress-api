@@ -14,7 +14,7 @@
 
 ---
 
-> **Status: v0.1.0** — core client with bills, members, and House roll call votes, verified against the live API. More endpoints on the way — star the repo to follow along.
+> **Status: v0.2.0** — full endpoint coverage: bills, members, votes, committees, nominations, treaties, amendments, the Congressional Record, and congress sessions, all verified against the live API.
 
 ---
 
@@ -50,13 +50,22 @@ console.log(positions.results?.length); // 434
 for await (const bill of congress.bills.list({ congress: 118, billType: 'hr' })) {
   console.log(bill.title);
 }
+
+// Committees, nominations, treaties, amendments too
+const committee = await congress.committee('house', 'hspw00');
+for await (const b of congress.committees.bills('house', 'hspw00')) {
+  console.log(`${b.type} ${b.number} — ${b.relationshipType}`);
+}
+
+const current = await congress.congresses.current();
+console.log(current.name); // "119th Congress"
 ```
 
 ### What you get
 
 - **Full type safety** — Every endpoint returns typed responses, no `any`
 - **Auto-pagination** — Async iterators follow `pagination.next` for you
-- **Rate limit handling** — Built-in retry with exponential backoff for 429s and 5xx, honors `Retry-After`
+- **Rate limit handling** — Built-in retry with exponential backoff for 429s and 5xx, honors `Retry-After` — but fails fast with `RateLimitError` if the server asks you to wait longer than `maxRetryDelayMs` (api.data.gov sends `Retry-After: 84868` when a daily quota runs out; sleeping a day inside a request helps no one)
 - **Zero dependencies** — Uses native `fetch()` (Node 18+, Deno, Bun, browsers)
 - **Tree-shakeable** — ESM + CJS dual build, `sideEffects: false`
 
@@ -83,12 +92,12 @@ try {
 | 📜 Bills | `list`, `get`, `actions`, `cosponsors`, `subjects`, `summaries`, `text`, `titles` | ✅ v0.1 |
 | 👥 Members | `list`, `get`, `sponsoredLegislation`, `cosponsoredLegislation` | ✅ v0.1 |
 | 🗳️ Votes | `list`, `get`, `memberVotes` — House roll calls¹ | ✅ v0.1 |
-| 🏛️ Committees | `list`, `get`, `bills`, `reports`, `nominations` | 🚧 planned |
-| 📋 Nominations | `list`, `get`, `actions`, `hearings` | 🚧 planned |
-| 🤝 Treaties | `list`, `get`, `actions` | 🚧 planned |
-| ✏️ Amendments | `list`, `get`, `actions`, `cosponsors` | 🚧 planned |
-| 📰 Congressional Record | `list` daily issues | 🚧 planned |
-| 📅 Congress | `list`, `get` session info | 🚧 planned |
+| 🏛️ Committees | `list`, `get`, `bills`, `reports`, `nominations` | ✅ v0.2 |
+| 📋 Nominations | `list`, `get`, `actions`, `committees`, `hearings`, `nominees` | ✅ v0.2 |
+| 🤝 Treaties | `list`, `get`, `actions`, `committees` | ✅ v0.2 |
+| ✏️ Amendments | `list`, `get`, `actions`, `cosponsors`, `amendments`, `text` | ✅ v0.2 |
+| 📰 Congressional Record | `issues` (classic), `daily` (modern) | ✅ v0.2 |
+| 📅 Congress | `list`, `get`, `current` | ✅ v0.2 |
 
 ¹ Via Congress.gov's beta `house-vote` endpoints. Senate roll call votes are not yet published by the Congress.gov API — they'll be added here the day upstream ships them.
 
