@@ -78,6 +78,23 @@ describe('CongressClient', () => {
     expect(requests, 'initial request + 2 retries').toHaveLength(3);
   });
 
+  it('fails fast instead of sleeping when Retry-After exceeds maxRetryDelayMs', async () => {
+    const { fetchFn, requests } = makeFetch(() =>
+      jsonResponse(
+        { error: 'OVER_RATE_LIMIT' },
+        { status: 429, headers: { 'retry-after': '84868' } },
+      ),
+    );
+    const err = await client(fetchFn)
+      .get('/bill')
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(RateLimitError);
+    expect((err as RateLimitError).retryAfterSeconds).toBe(84868);
+    expect((err as RateLimitError).message).toContain('beyond maxRetryDelayMs');
+    expect(requests, 'no retry attempts for a day-long Retry-After').toHaveLength(1);
+  });
+
   it('retries 5xx responses', async () => {
     const { fetchFn, requests } = makeFetch(
       () => jsonResponse({}, { status: 503 }),
@@ -137,6 +154,19 @@ describe('CongressClient', () => {
       const { fetchFn } = makeFetch(() => jsonResponse({ pagination: { count: 0 } }));
       const items = await collect(client(fetchFn).paginate('/bill', 'bills'));
       expect(items).toEqual([]);
+    });
+
+    it('extracts nested lists via dot-path keys', async () => {
+      const { fetchFn } = makeFetch(() =>
+        jsonResponse({
+          'committee-bills': { bills: [{ number: '1' }] },
+          pagination: { count: 1 },
+        }),
+      );
+      const items = await collect(
+        client(fetchFn).paginate<{ number: string }>('/committee/house/hspw00/bills', 'committee-bills.bills'),
+      );
+      expect(items.map((b) => b.number)).toEqual(['1']);
     });
 
     it('throws a clear error when the list key holds a non-array', async () => {

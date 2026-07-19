@@ -1,6 +1,6 @@
 {
   "name": "@capitoltrace/congress-api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed, zero-dependency TypeScript client for the Congress.gov API — bills, members, votes, and more.",
   "keywords": [
     "congress",

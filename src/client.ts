@@ -15,6 +15,13 @@ export interface CongressClientOptions {
   timeoutMs?: number;
   /** Base delay for exponential backoff in milliseconds. Default: 500 */
   retryBaseDelayMs?: number;
+  /**
+   * Longest the client will sleep before a retry, in milliseconds. If the
+   * server's Retry-After asks for more (api.data.gov sends hours when a
+   * daily quota is exhausted), the request fails immediately with
+   * RateLimitError instead of hanging. Default: 30000
+   */
+  maxRetryDelayMs?: number;
 }
 
 export type QueryValue = string | number | boolean | undefined;
@@ -35,6 +42,7 @@ export class CongressClient {
   private readonly maxRetries: number;
   private readonly timeoutMs: number;
   private readonly retryBaseDelayMs: number;
+  private readonly maxRetryDelayMs: number;
 
   constructor(options: CongressClientOptions) {
     if (!options.apiKey) {
@@ -48,6 +56,7 @@ export class CongressClient {
     this.maxRetries = options.maxRetries ?? 3;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.retryBaseDelayMs = options.retryBaseDelayMs ?? 500;
+    this.maxRetryDelayMs = options.maxRetryDelayMs ?? 30_000;
   }
 
   /** GET a single endpoint and parse the JSON response. */
@@ -57,7 +66,8 @@ export class CongressClient {
 
   /**
    * Iterate every item of a paginated list endpoint, following
-   * `pagination.next` until exhausted.
+   * `pagination.next` until exhausted. `listKey` may be a dot-path for
+   * nested envelopes (e.g. `committee-bills.bills`).
    */
   async *paginate<T>(
     path: string,
@@ -128,21 +138,27 @@ export class CongressClient {
 
       if (res.status === 429 || res.status >= 500) {
         const retryAfterSeconds = parseRetryAfter(res.headers.get('retry-after'));
-        if (attempt < this.maxRetries) {
-          await sleep(
-            retryAfterSeconds !== undefined
-              ? retryAfterSeconds * 1000
-              : this.backoffDelay(attempt),
-          );
+        const delayMs =
+          retryAfterSeconds !== undefined
+            ? retryAfterSeconds * 1000
+            : this.backoffDelay(attempt);
+        if (attempt < this.maxRetries && delayMs <= this.maxRetryDelayMs) {
+          await sleep(delayMs);
           attempt += 1;
           continue;
         }
         const body = await safeJson(res);
         if (res.status === 429) {
-          throw new RateLimitError(
-            `Congress.gov rate limit exceeded (429) after ${this.maxRetries} retries`,
-            { status: 429, url, body, retryAfterSeconds },
-          );
+          const why =
+            delayMs > this.maxRetryDelayMs && retryAfterSeconds !== undefined
+              ? `server asked to retry in ${Math.round(retryAfterSeconds)}s, beyond maxRetryDelayMs`
+              : `after ${this.maxRetries} retries`;
+          throw new RateLimitError(`Congress.gov rate limit exceeded (429) — ${why}`, {
+            status: 429,
+            url,
+            body,
+            retryAfterSeconds,
+          });
         }
         throw new CongressApiError(
           `Congress.gov API request failed with status ${res.status}${messageFrom(body)}`,
@@ -172,13 +188,17 @@ function clampLimit(limit: QueryValue): number {
   return Math.min(Math.max(Math.floor(n), 1), MAX_PAGE_LIMIT);
 }
 
-function extractList<T>(data: ListEnvelope, key: string, url: string): T[] {
-  const value = data[key];
+function extractList<T>(data: ListEnvelope, keyPath: string, url: string): T[] {
+  let value: unknown = data;
+  for (const key of keyPath.split('.')) {
+    if (value === undefined || value === null) break;
+    value = (value as Record<string, unknown>)[key];
+  }
   // Congress.gov omits the list key entirely for some empty result sets.
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) {
     throw new CongressApiError(
-      `Expected "${key}" to be an array in the response (got keys: ${Object.keys(data).join(', ')})`,
+      `Expected "${keyPath}" to be an array in the response (got keys: ${Object.keys(data).join(', ')})`,
       { status: 200, url, body: data },
     );
   }
