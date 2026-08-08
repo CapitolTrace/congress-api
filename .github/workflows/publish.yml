@@ -1,12 +1,23 @@
 name: Publish to npm
 
+# Publishes when a GitHub release is created. Requires the NPM_TOKEN
+# repository secret (an npm automation token for the @capitoltrace scope).
+#
+# Hardened 2026-08-08 to match govwatch's publish workflow (capitoltrace
+# automation review): semver-tag gate so marker tags can never publish, and
+# npm provenance attestation via OIDC (repo is public, so --provenance works).
 on:
   release:
     types: [published]
 
 jobs:
   publish:
+    # Only full semver tags (v1.2.0) publish; skip marker tags like v1.
+    if: contains(github.event.release.tag_name, '.')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,6 +27,6 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       # prepublishOnly runs typecheck + test + build
-      - run: npm publish
+      - run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
