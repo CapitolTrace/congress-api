@@ -51,7 +51,12 @@ export class CongressClient {
       );
     }
     this.apiKey = options.apiKey;
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    // Linear-time trailing-slash strip; /\/+$/ backtracks polynomially (CodeQL js/polynomial-redos).
+    let baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    while (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
+    this.baseUrl = baseUrl;
     this.fetchFn = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.maxRetries = options.maxRetries ?? 3;
     this.timeoutMs = options.timeoutMs ?? 30_000;
