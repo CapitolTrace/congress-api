@@ -1,11 +1,17 @@
 name: Publish to npm
 
-# Publishes when a GitHub release is created. Requires the NPM_TOKEN
-# repository secret (an npm automation token for the @capitoltrace scope).
+# Publishes when a GitHub release is created, authenticated via npm Trusted
+# Publishing (OIDC) — there is no NPM_TOKEN secret anymore. npm revoked
+# classic automation tokens and no longer offers a 2FA-exempt token path, so
+# the trusted publisher configured on npmjs.com (package Settings → Trusted
+# Publisher → GitHub Actions: CapitolTrace/congress-api, publish.yml) is the
+# only credential this workflow needs; the job mints a short-lived OIDC token
+# per run.
 #
-# Hardened 2026-08-08 to match govwatch's publish workflow (capitoltrace
-# automation review): semver-tag gate so marker tags can never publish, and
-# npm provenance attestation via OIDC (repo is public, so --provenance works).
+# Provenance attestation is generated automatically on OIDC publishes from a
+# public repo — no --provenance flag needed.
+#
+# Semver-tag gate retained: marker tags like v1 can never publish.
 on:
   release:
     types: [published]
@@ -17,16 +23,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write # OIDC — used for both auth (trusted publishing) and provenance
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Trusted publishing requires Node >= 22.14.
+          node-version: 22
           cache: npm
           registry-url: https://registry.npmjs.org
+      # Trusted publishing requires npm >= 11.5.1; Node 22 bundles npm 10.
+      - run: npm install -g npm@latest
       - run: npm ci
       # prepublishOnly runs typecheck + test + build
-      - run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish
