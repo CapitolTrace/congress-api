@@ -29,9 +29,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           # Trusted publishing requires Node >= 22.14.
+          # Deliberately NO registry-url: setting it makes setup-node write
+          # an .npmrc wired to a placeholder NODE_AUTH_TOKEN, and npm sends
+          # that garbage token instead of doing the OIDC exchange (proven on
+          # capitoltrace-ui's first trusted publish: masked E404).
           node-version: 22
           cache: npm
-          registry-url: https://registry.npmjs.org
       # Trusted publishing requires npm >= 11.5.1; Node 22 bundles npm 10.
       - run: npm install -g npm@latest
       - run: npm ci
